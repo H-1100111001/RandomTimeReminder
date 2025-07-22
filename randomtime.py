@@ -31,6 +31,7 @@ newstoptime = 0  # 当前的stoptime值（秒），随机生成后存储
 exetime = maxtime*60  # 工作流剩余寿命（秒）
 filewav_ding = resource_path(r"data/ding.wav")
 filewav_dding = resource_path(r"data/dding.wav")
+filewav_dingg = resource_path(r"data/dingg.wav")
 stopevent = threading.Event()
 workthread = None
 progress_bar = None
@@ -38,36 +39,45 @@ progress_label = None
 max_exetime = maxtime * 60  # 初始最大时间（秒）
 auto_exit_var = None
 #----------------基本函数----------------#
+def play_ding_sound():#播放休息提示音ding
+    try:
+        normalized_path = resource_path(filewav_ding)
+        winsound.PlaySound(normalized_path, winsound.SND_ASYNC)
+        print('播放ding')
+    except Exception as e:print(f'音效错误{e}')
+
+def play_dding_sound():#播放工作提示音dding
+    try:
+        normalized_path = resource_path(filewav_dding)
+        winsound.PlaySound(normalized_path, winsound.SND_ASYNC)
+        print('播放dingg')
+    except Exception as e:print(f'音效错误{e}')
+
+def play_dingg_sound():#播放结束提示音dingg
+    try:
+        normalized_path = resource_path(filewav_dingg)
+        winsound.PlaySound(normalized_path, winsound.SND_ASYNC)
+        print('播放dding')
+    except Exception as e:print(f'音效错误{e}')
+
 def setrandomtime():#生成新的ingtime和stoptime
     global newingtime,newstoptime
     newingtime = round(r.uniform(ingtime_min, ingtime_max),2)
     newstoptime = r.randint(stoptime_min, stoptime_max)
 
-def play_ding_sound():#播放提示音ding
-    print(f'尝试播放 ding 音频，路径: {filewav_ding}')
-    try:
-        normalized_path = resource_path(filewav_ding)
-        winsound.PlaySound(normalized_path, winsound.SND_ASYNC)
-        print('播放ding')
-    except Exception as e:
-        print(f'音效错误{e}')
-
-def play_dding_sound():#播放提示音dding
-    print(f'尝试播放 dding 音频，路径: {filewav_dding}')
-    try:
-        normalized_path = resource_path(filewav_dding)
-        winsound.PlaySound(normalized_path, winsound.SND_ASYNC)
-        print('播放dding')
-    except Exception as e:
-        print(f'音效错误{e}')
-
 def timeloop():#单次计时
     global exetime
+    if exetime <= ingtime_min:
+        print('剩余时间小于ingtime_min')
+        play_dingg_sound()
+        stopbutton()
+        exetime = 0
+        box.after(0, update_progress_bar)
     if exetime <= newingtime*60+newstoptime:
         print('最后一次ingtime')
         play_dding_sound()
         time.sleep(exetime)
-        play_ding_sound()
+        play_dingg_sound()
         exetime = 0
         box.after(0,update_progress_bar)
     else:
@@ -79,33 +89,26 @@ def timeloop():#单次计时
         play_ding_sound()
         time.sleep(newstoptime);exetime -= newstoptime
         box.after(0,update_progress_bar)
-        if exetime <= ingtime_min :
-            print('剩余时间小于ingtime_min')
-            play_ding_sound()
-            exetime = 0
-            box.after(0,update_progress_bar)
 
 def workfun():#工作流
     try:
         while not stopevent.is_set():
             if exetime <= 0:
-                print('工作结束')
+                play_dingg_sound()
                 stopbutton() # 正常结束时设置标志
                 box.after(0, lambda: set_entries_state("normal"))#输入框可编辑
                 if auto_exit_var.get():
-                    box.after(0, exitbutton)  # 自动退出
+                    box.after(3000, exitbutton)  # 自动退出
                 break
-            setrandomtime()
-            print(newingtime, newstoptime)
+            setrandomtime();print(newingtime, newstoptime);
             timeloop()
     except Exception as e:
         print(f"工作线程错误: {e}")
         box.after(0, lambda: set_entries_state("normal"))
         box.after(0, lambda: set_buttons_state("normal", "disabled"))
-#----------------保存默认值----------------#
+#----------------参数配置----------------#
 def save_settings():# 保存设置到 JSON 文件
-    settings = {
-        "ingtime_min": ingtime_min,
+    settings = {"ingtime_min": ingtime_min,
         "ingtime_max": ingtime_max,
         "stoptime_min": stoptime_min,
         "stoptime_max": stoptime_max,
@@ -148,13 +151,7 @@ def load_settings():# 加载设置从 JSON 文件
         print("未找到 settings.json，使用默认值")
         print(f"未找到 {settings_path}，生成默认配置文件")
         # 生成默认配置文件
-        settings = {
-            "ingtime_min": 3.0,
-            "ingtime_max": 5.0,
-            "stoptime_min": 8,
-            "stoptime_max": 12,
-            "maxtime": 60.0
-        }
+        settings = {"ingtime_min": 3.0,"ingtime_max": 5.0,"stoptime_min": 8,"stoptime_max": 12,"maxtime": 60.0}
     except Exception as e:
         print(f"加载设置失败: {e}")
 #----------------窗口----------------#
@@ -163,8 +160,8 @@ box.title('随机计时提示器_V1.0');box.geometry('520x420');
 box.config(bg='#f0f0f0'),box.resizable(width=False,height=False)
 try:#加载字体
     from tkinter import font as tkfont
-    custom_font_path = resource_path('data/SimsunExtG.ttf')  # 替换为你的字体文件名
-    custom_font = tkfont.Font(family="SimsunExtG.ttf", size=12)  # 替换为你的字体名称
+    custom_font_path = resource_path('data/SimsunExtG.ttf')
+    custom_font = tkfont.Font(family="SimsunExtG.ttf", size=12)
     large_font = tkfont.Font(family="SimsunExtG.ttf", size=20)
     help_font = tkfont.Font(family="SimsunExtG.ttf", size=16)
 except Exception as e:
@@ -213,6 +210,20 @@ def helpbutton():#帮助按钮
     ok_button.place(x=175, y=340)
     update_parameters()
     print(f'输入值ingtime{ingtime_min*60}~{ingtime_max*60}，stoptime{stoptime_min}~{stoptime_max}，maxtime{maxtime*60}')
+
+
+def create_sound_test_panel(box):#音效测试框和按钮
+    sound_frame = tk.LabelFrame(box, text="试听提示音", font=custom_font,bg='#f0f0f0', padx=5, pady=5)
+    sound_frame.place(x=200, y=10, width=220, height=60)
+    work_btn = tk.Button(sound_frame, text="工作▷", font=custom_font,command=play_dding_sound, width=6,
+                         bg='#e6f7ff', relief=tk.RAISED)
+    work_btn.grid(row=0, column=0, padx=5, pady=5)
+    rest_btn = tk.Button(sound_frame, text="休息▷", font=custom_font,command=play_ding_sound, width=6,
+                         bg='#fff7e6', relief=tk.RAISED)
+    rest_btn.grid(row=0, column=1, padx=5, pady=5)
+    end_btn = tk.Button(sound_frame, text="终止▷", font=custom_font,command=play_dingg_sound, width=6,
+                        bg='#ffebee', relief=tk.RAISED)
+    end_btn.grid(row=0, column=2, padx=5, pady=5)
 
 def update_parameters():#更新运行参数
     global ingtime_min, ingtime_max, stoptime_min, stoptime_max, maxtime
@@ -360,5 +371,5 @@ load_settings()#加载保存的配置
 set_buttons_state(start_state="normal",stop_state="disabled")
 create_progress_bar(box)
 create_auto_exit_checkbox(box)
-
+create_sound_test_panel(box)
 box.mainloop()#让窗口保持运行，放最后一行
